@@ -9,13 +9,12 @@
   "categories": [
     "Other"
   ],
-  "activationEvents": [],
+  "activationEvents": [
+    "workspaceContains:.gitignore"
+  ],
   "main": "./extension.js",
   "contributes": {
-    "commands": [{
-      "command": "auto-gitignore.helloWorld",
-      "title": "Hello World"
-    }]
+    "commands": []
   },
   "scripts": {
     "lint": "eslint .",
