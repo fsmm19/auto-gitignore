@@ -10,7 +10,8 @@
     "Other"
   ],
   "activationEvents": [
-    "workspaceContains:.gitignore"
+    "workspaceContains:.gitignore",
+    "onStartupFinished"
   ],
   "main": "./extension.js",
   "contributes": {
