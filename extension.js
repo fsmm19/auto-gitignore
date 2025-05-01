@@ -1,5 +1,3 @@
-import('node-fetch');
-
 const vscode = require('vscode');
 const gitignoreApiListUrl =
   'https://www.toptal.com/developers/gitignore/api/list?format=json';
@@ -36,45 +34,6 @@ function activate(context) {
 
   context.subscriptions.push(createDisposable);
   context.subscriptions.push(updateDisposable);
-}
-
-function createGitignoreFile() {
-  try {
-    const defaultComment = `# Created by Auto-GitIgnore\n`;
-
-    vscode.workspace.findFiles('**/.gitignore').then(async (uris) => {
-      if (uris.length > 0) {
-        vscode.window.showInformationMessage('.gitignore file already exists!');
-      } else {
-        const workspaceFolders = vscode.workspace.workspaceFolders;
-
-        if (!workspaceFolders) {
-          vscode.window.showErrorMessage(
-            'No workspace folder found. Please open a folder to create a .gitignore file.'
-          );
-          return;
-        }
-
-        const rootUri = workspaceFolders[0].uri;
-        const gitignoreUri = vscode.Uri.joinPath(rootUri, '.gitignore');
-        const gitignoreContent = new TextEncoder().encode(defaultComment);
-
-        await vscode.workspace.fs.writeFile(gitignoreUri, gitignoreContent);
-
-        vscode.window.showTextDocument(
-          await vscode.workspace.openTextDocument(gitignoreUri)
-        );
-
-        vscode.window.showInformationMessage(
-          '.gitignore file created successfully!'
-        );
-      }
-    });
-  } catch (error) {
-    vscode.window.showErrorMessage(
-      `Error creating .gitignore file: ${error.message}`
-    );
-  }
 }
 
 function updateGitignoreFile(templatesGitignore) {
@@ -114,6 +73,71 @@ function updateGitignoreFile(templatesGitignore) {
 async function gitignoreExists() {
   const uris = await vscode.workspace.findFiles('**/.gitignore');
   return uris.length > 0;
+}
+
+/**
+ * Writes content to a .gitignore file at the specified URI, opens the file in the editor,
+ * and handles any errors that occur during the process.
+ *
+ * @param {vscode.Uri} uri - The URI of the .gitignore file to be written.
+ * @param {string} content - The content to be written to the .gitignore file.
+ * @returns {Promise<void>} A promise that resolves when the file is written and opened successfully.
+ * @throws Will display an error message if writing the file or opening it fails.
+ */
+async function writeGitignoreFile(uri, content) {
+  try {
+    const gitignoreContent = new TextEncoder().encode(content);
+    await vscode.workspace.fs.writeFile(uri, gitignoreContent);
+
+    const document = await vscode.workspace.openTextDocument(uri);
+    await vscode.window.showTextDocument(document);
+  } catch (error) {
+    vscode.window.showErrorMessage(
+      `Error writing .gitignore file: ${error.message}`
+    );
+  }
+}
+
+/**
+ * Asynchronously creates a '.gitignore' file in the root of the current workspace.
+ * If a '.gitignore' file already exists, it displays an informational message.
+ * If no workspace is open, it displays an error message.
+ *
+ * The '.gitignore' file is initialized with a default comment.
+ *
+ * @async
+ * @function
+ * @throws {Error} If an unexpected error occurs during the file creation process.
+ */
+async function createGitignoreFile() {
+  try {
+    const defaultComment = `# Created by Auto-GitIgnore\n`;
+
+    if (await gitignoreExists()) {
+      vscode.window.showInformationMessage('.gitignore file already exists!');
+    } else {
+      const workspaceFolders = vscode.workspace.workspaceFolders;
+
+      if (!workspaceFolders) {
+        vscode.window.showErrorMessage(
+          'No workspace folder found. Please open a folder to create a .gitignore file.'
+        );
+        return;
+      }
+
+      const rootUri = workspaceFolders[0].uri;
+      const gitignoreFileUri = vscode.Uri.joinPath(rootUri, '.gitignore');
+
+      writeGitignoreFile(gitignoreFileUri, defaultComment);
+      vscode.window.showInformationMessage(
+        '.gitignore file created successfully!'
+      );
+    }
+  } catch (error) {
+    vscode.window.showErrorMessage(
+      `Error creating .gitignore file: ${error.message}`
+    );
+  }
 }
 
 /**
