@@ -105,6 +105,18 @@ function updateGitignoreFile(templatesGitignore) {
 }
 
 /**
+ * Checks if a '.gitignore' file exists in the current workspace.
+ *
+ * @async
+ * @function
+ * @returns {Promise<boolean>} A promise that resolves to 'true' if a '.gitignore' file is found, otherwise 'false'.
+ */
+async function gitignoreExists() {
+  const uris = await vscode.workspace.findFiles('**/.gitignore');
+  return uris.length > 0;
+}
+
+/**
  * @description This function is called when the extension is deactivated.
  */
 function deactivate() {}
