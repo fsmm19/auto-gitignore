@@ -17,8 +17,12 @@
   "contributes": {
     "commands": [
       {
-        "command": "auto-gitignore.createGitIgnore",
-        "title": "Create .gitignore file"
+        "command": "auto-gitignore.createEmptyGitIgnore",
+        "title": "Create empty .gitignore file"
+      },
+      {
+        "command": "auto-gitignore.createGitignoreWithPatterns",
+        "title": "Create .gitignore file with patterns"
       },
       {
         "command": "auto-gitignore.updateGitIgnore",
