@@ -6,22 +6,27 @@ const gitignoreApiListUrl =
  * @description This function is called when the extension is activated.
  * @param {*} context The context object provides information about the extension's environment.
  */
-function activate(context) {
+async function activate(context) {
   let templatesGitignore = {};
 
-  console.log('Auto-GitIgnore is now active!');
+  try {
+    const response = await fetch(gitignoreApiListUrl);
+    templatesGitignore = await response.json();
+  } catch (error) {
+    console.error('Error fetching gitignore templates:', error);
+  }
 
-  fetch(gitignoreApiListUrl)
-    .then((response) => response.json())
-    .then((data) => (templatesGitignore = JSON.parse(JSON.stringify(data))))
-    .catch((error) =>
-      console.error('Error fetching gitignore templates:', error)
-    );
-
-  const createDisposable = vscode.commands.registerCommand(
-    'auto-gitignore.createGitIgnore',
+  const createEmptyDisposable = vscode.commands.registerCommand(
+    'auto-gitignore.createEmptyGitIgnore',
     () => {
-      createGitignoreFile();
+      createEmptyGitignore();
+    }
+  );
+
+  const createWithPatternsDisposable = vscode.commands.registerCommand(
+    'auto-gitignore.createGitignoreWithPatterns',
+    async () => {
+      await createGitignoreWithPatterns(templatesGitignore);
     }
   );
 
@@ -32,7 +37,8 @@ function activate(context) {
     }
   );
 
-  context.subscriptions.push(createDisposable);
+  context.subscriptions.push(createEmptyDisposable);
+  context.subscriptions.push(createWithPatternsDisposable);
   context.subscriptions.push(updateDisposable);
 }
 
@@ -52,7 +58,7 @@ function updateGitignoreFile(templatesGitignore) {
       })
       .then((selectedOption) => {
         if (!selectedOption) {
-          return; // User canceled the selection
+          return;
         } else {
         }
       });
@@ -109,7 +115,7 @@ async function writeGitignoreFile(uri, content) {
  * @function
  * @throws {Error} If an unexpected error occurs during the file creation process.
  */
-async function createGitignoreFile() {
+async function createEmptyGitignore() {
   try {
     const defaultComment = `# Created by Auto-GitIgnore\n`;
 
@@ -131,6 +137,103 @@ async function createGitignoreFile() {
       writeGitignoreFile(gitignoreFileUri, defaultComment);
       vscode.window.showInformationMessage(
         '.gitignore file created successfully!'
+      );
+    }
+  } catch (error) {
+    vscode.window.showErrorMessage(
+      `Error creating .gitignore file: ${error.message}`
+    );
+  }
+}
+
+/**
+ * Prompts the user to select a project type from a list of templates and returns the selected option.
+ *
+ * @param {Object} templatesGitignore - An object containing gitignore templates.
+ * @returns {Promise<string|null>} A promise that resolves to the selected template name, or null if no selection is made.
+ * @throws {Error} If an error occurs during the selection process, it is caught and an error message is displayed.
+ */
+async function selectProjectType(templatesGitignore) {
+  try {
+    const options = [];
+
+    for (const template in templatesGitignore) {
+      options.push(templatesGitignore[template].name);
+    }
+
+    options.sort((a, b) => a.localeCompare(b));
+
+    const selectedOption = await vscode.window.showQuickPick(options, {
+      placeHolder: 'Select a template to add to .gitignore',
+    });
+
+    return selectedOption || null;
+  } catch (error) {
+    vscode.window.showErrorMessage(
+      `Error selecting project type: ${error.message}`
+    );
+    return null;
+  }
+}
+
+/**
+ * Retrieves a gitignore template object from a collection of templates based on the specified template name.
+ *
+ * @param {Object} templatesGitignore - An object containing gitignore templates, where each value is a template object.
+ * @param {string} template - The name of the template to retrieve.
+ * @returns {Object|undefined} The gitignore template object that matches the specified name, or undefined if not found.
+ */
+function getGitignoreTemplate(templatesGitignore, template) {
+  return Object.values(templatesGitignore).find(
+    (item) => item.name === template
+  );
+}
+
+/**
+ * Creates a '.gitignore' file in the current workspace folder based on the selected project type.
+ * If a '.gitignore' file already exists, it notifies the user and does not overwrite it.
+ *
+ * @async
+ * @function
+ * @param {Object[]} templatesGitignore - An array of gitignore templates, where each template contains
+ *                                        a 'name' and 'contents' property.
+ * @throws {Error} If an error occurs during the creation of the '.gitignore' file.
+ */
+async function createGitignoreWithPatterns(templatesGitignore) {
+  try {
+    const defaultComment = `# Created by Auto-GitIgnore\n`;
+
+    if (await gitignoreExists()) {
+      vscode.window.showInformationMessage('.gitignore file already exists!');
+    } else {
+      const workspaceFolders = vscode.workspace.workspaceFolders;
+
+      if (!workspaceFolders) {
+        vscode.window.showErrorMessage(
+          'No workspace folder found. Please open a folder to create a .gitignore file.'
+        );
+        return;
+      }
+
+      const template = await selectProjectType(templatesGitignore);
+
+      if (!template) {
+        return;
+      }
+
+      const rootUri = workspaceFolders[0].uri;
+      const gitignoreFileUri = vscode.Uri.joinPath(rootUri, '.gitignore');
+      const selectedTemplate = getGitignoreTemplate(
+        templatesGitignore,
+        template
+      );
+
+      writeGitignoreFile(
+        gitignoreFileUri,
+        defaultComment + selectedTemplate.contents
+      );
+      vscode.window.showInformationMessage(
+        `.gitignore file created successfully for ${template} project!`
       );
     }
   } catch (error) {
