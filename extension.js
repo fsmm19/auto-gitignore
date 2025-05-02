@@ -42,6 +42,53 @@ async function activate(context) {
   context.subscriptions.push(updateDisposable);
 }
 
+/**
+ * Merges the content of an existing `.gitignore` file with a template's content,
+ * ensuring no duplicate rules are added. Adds a header indicating the template
+ * name and the date of addition if new rules are appended.
+ *
+ * @param {string} existingContent - The current content of the `.gitignore` file.
+ * @param {string} templateContent - The content of the template to merge.
+ * @param {string} templateName - The name of the template being merged, used in the header.
+ * @returns {string} - The updated `.gitignore` content with the merged rules, or the original content if no new rules are added.
+ */
+function mergeGitignoreContent(existingContent, templateContent, templateName) {
+  const filterNonRules = (content) => {
+    return content
+      .split('\n')
+      .map((line) => line.trim())
+      .filter((line) => line && !line.startsWith('#'));
+  };
+
+  const existingRules = new Set(filterNonRules(existingContent));
+  const templateLines = templateContent.split('\n');
+  const newRules = [];
+
+  for (const line of templateLines) {
+    const trimmedLine = line.trim();
+    if (!trimmedLine || trimmedLine.startsWith('#')) {
+      continue;
+    } else if (!existingRules.has(trimmedLine)) {
+      newRules.push(line);
+    }
+  }
+
+  if (newRules.length > 0) {
+    return `${existingContent.trim()}\n\n# ${templateName} (Added: ${
+      new Date().toISOString().split('T')[0]
+    })\n${newRules.join('\n')}\n`;
+  } else {
+    return existingContent;
+  }
+}
+
+/**
+ * Updates the .gitignore file in the current workspace by adding rules from a selected template.
+ *
+ * @param {Object} templatesGitignore - An object containing available .gitignore templates.
+ *
+ * @throws {Error} If an unexpected error occurs during the update process.
+ */
 function updateGitignoreFile(templatesGitignore) {
   try {
     const options = [];
@@ -50,16 +97,53 @@ function updateGitignoreFile(templatesGitignore) {
       options.push(templatesGitignore[template].name);
     }
 
-    console.log(templatesGitignore);
+    options.sort((a, b) => a.localeCompare(b));
 
     vscode.window
       .showQuickPick(options, {
         placeHolder: 'Select a template to add to .gitignore',
       })
-      .then((selectedOption) => {
+      .then(async (selectedOption) => {
         if (!selectedOption) {
           return;
+        }
+
+        const selectedTemplate = getGitignoreTemplate(
+          templatesGitignore,
+          selectedOption
+        );
+
+        if (!selectedTemplate) {
+          vscode.window.showErrorMessage('Template not found.');
+          return;
+        }
+
+        const uris = await vscode.workspace.findFiles('**/.gitignore');
+        if (uris.length === 0) {
+          vscode.window.showInformationMessage(
+            'No .gitignore file found. Create one first.'
+          );
+          return;
+        }
+
+        const gitignoreUri = uris[0];
+        const document = await vscode.workspace.openTextDocument(gitignoreUri);
+        const existingContent = document.getText();
+        const updatedContent = mergeGitignoreContent(
+          existingContent,
+          selectedTemplate.contents,
+          selectedTemplate.name
+        );
+
+        if (updatedContent !== existingContent) {
+          await writeGitignoreFile(gitignoreUri, updatedContent);
+          vscode.window.showInformationMessage(
+            `.gitignore updated with ${selectedTemplate.name} rules!`
+          );
         } else {
+          vscode.window.showInformationMessage(
+            `No new rules to add from ${selectedTemplate.name} template.`
+          );
         }
       });
   } catch (error) {
@@ -195,8 +279,7 @@ function getGitignoreTemplate(templatesGitignore, template) {
  *
  * @async
  * @function
- * @param {Object[]} templatesGitignore - An array of gitignore templates, where each template contains
- *                                        a 'name' and 'contents' property.
+ * @param {Object} templatesGitignore -  An object containing gitignore templates.
  * @throws {Error} If an error occurs during the creation of the '.gitignore' file.
  */
 async function createGitignoreWithPatterns(templatesGitignore) {
